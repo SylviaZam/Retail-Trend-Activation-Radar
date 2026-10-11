@@ -1,0 +1,49 @@
+{
+  "_note": "Each market lists the search term people there would type for each concept. Terms are the author's choices; see README > Limitations.",
+  "markets": {
+    "US": {
+      "name": "United States",
+      "hl": "en-US",
+      "terms": {
+        "sneakers": "sneakers",
+        "laptops": "laptops",
+        "furniture": "furniture",
+        "cosmetics": "cosmetics",
+        "groceries": "groceries"
+      }
+    },
+    "GB": {
+      "name": "United Kingdom",
+      "hl": "en-GB",
+      "terms": {
+        "sneakers": "trainers",
+        "laptops": "laptops",
+        "furniture": "furniture",
+        "cosmetics": "makeup",
+        "groceries": "groceries"
+      }
+    },
+    "JP": {
+      "name": "Japan",
+      "hl": "ja-JP",
+      "terms": {
+        "sneakers": "スニーカー",
+        "laptops": "ノートパソコン",
+        "furniture": "家具",
+        "cosmetics": "化粧品",
+        "groceries": "食料品"
+      }
+    },
+    "MX": {
+      "name": "Mexico",
+      "hl": "es-MX",
+      "terms": {
+        "sneakers": "tenis",
+        "laptops": "laptop",
+        "furniture": "muebles",
+        "cosmetics": "maquillaje",
+        "groceries": "despensa"
+      }
+    }
+  }
+}

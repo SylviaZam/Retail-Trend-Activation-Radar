@@ -1,127 +1,83 @@
 # Retail Trend & Activation Radar
 
-Turns **Google Trends** into a monthly **Activation Radar** for go-to-market: ingests signals, engineers momentum (MA, YoY, z-score), ranks “hot windows” by category, and exports a stakeholder-ready Excel workbook + preview charts.
+[![Tests](https://github.com/SylviaZam/Retail-Trend-Activation-Radar/actions/workflows/tests.yml/badge.svg)](https://github.com/SylviaZam/Retail-Trend-Activation-Radar/actions/workflows/tests.yml)
 
----
+When does each market start looking for a product, and what word does it use to search? This project pulls five years of weekly Google Trends data for five retail concepts in four markets (United States, United Kingdom, Japan, Mexico), searching in each market's own language. It turns that data into three things a launch team can use: each market's seasonal calendar, a check on whether the English keyword reaches local shoppers at all, and a month-by-month momentum score. The outputs are an Excel workbook and charts, rebuilt automatically every month.
 
-## What’s inside
-- **CLI:** `src/radar_cli.py` — one command regenerates CSV, Excel, and PNG previews.
-- **Notebooks (explorable):**
-  - `notebooks/01_signal_ingest.ipynb` — pulls Google Trends, engineers MA / YoY / z-score features, saves sample Excel.
-  - `notebooks/02_activation_windows.ipynb` — monthly scoring, **Activation Radar** heatmap, **Top Months** table.
-- **Preview charts:**
-  - ![Trends preview](assets/trends_preview.png)
-  - ![Activation radar](assets/activation_radar.png)
+## What the data shows (run of October 2026, weekly data Oct 2021 to Oct 2026)
 
----
+**1. An English keyword list misses most non-English markets.** In Japan the local word takes 92-98% of combined search interest for every concept. Searches there are for スニーカー (98%), not "sneakers". The same holds in Mexico (90-97%) and even in the UK, where "trainers" takes 92% against "sneakers". A tracker built on US keywords would be measuring almost nothing in those markets.
 
-## Situational context
+![Local word vs English word](assets/localization_gap.png)
 
-This repo is to be practically applied for the **hypothetical** context of supporting a retail GTM team planning seasonal campaigns. In this case stakeholders request an always-current read on **which product topics are heating up**, **when they peak**, and **where to focus creative and inventory**.
+**2. The same product peaks in different months in different markets.** Laptops peak in August in the US (33% above an average month), in March in Japan (+27%), and in November in the UK (+31%). These months are plausibly the US back-to-school season, Japan's April school and fiscal-year start, and Black Friday, but the data shows timing, not causes. Sneakers peak in April in Japan and in December in Mexico. In Mexico, "maquillaje" (makeup) runs at more than 3x its usual level every October, around Día de Muertos and Halloween; no other market has a swing that large. A single global campaign calendar would be early or late in most of these markets.
 
-**Business question**
-- Which keywords show sustained growth (vs noise), and in which months should we activate?
+![Seasonality by market](assets/market_seasonality.png)
 
-**What the sample represents**
-- Public Google Trends pull (pytrends) for a small set of retail keywords.
-- The notebook detects “hot windows” via moving averages, YoY normalization, and z-scores.
+**3. Momentum, month by month.** The activation score flags months where a series is running well above its own recent level and above last year. It is a screening aid for "what is heating up now", read next to the seasonal calendar above.
 
-**How to use the output**
-- The **Activation_Radar** sheet highlights months where interest is meaningfully above trend; use it to time **launches, promos, and content**.
-- The **Top_Months** sheet supports **buying and inventory** calls.
+![Activation radar](assets/activation_radar.png)
 
-**Assumptions / scope**
-- Trends ≠ demand; validate with site/search/conversion data before committing budget.
-- Add your own keyword set to localize by category/market.
+## How it works
 
----
+1. **Collect.** `config/markets.json` lists the term people in each market would type for each concept (for example, Japan: ノートパソコン for laptops). Each term is requested on its own, so every series uses the full 0-100 Trends scale. The current, still-incomplete week is dropped.
+2. **Seasonal calendar.** For each complete calendar year, each month's average is divided by that year's average. Dividing by the year removes growth or decline across years. The results are averaged across the four complete years, so **100 = an average month** and 130 = typically 30% above.
+3. **Local vs English.** For every concept where the local term differs from English, both are requested together, so they share one scale. `local_share = local / (local + English)` over the five years.
+4. **Momentum score**, per month: `0.6 × z-score + 0.3 × year-over-year growth + 0.1 × share of hot weeks`, with each part scaled 0-1.
+   - z-score: the 4-week moving average against its own last 12 weeks.
+   - Year-over-year: this week against the same week last year, clipped to 80-200.
+   - Hot week: z ≥ 1.2.
+   - Months without a year of history are not scored.
 
-## Inputs (signals)
-- **Source:** Google Trends weekly interest via `pytrends` for a keyword list (e.g., `sneakers`, `laptops`).
-- **Features:** moving average (smoothing), **YoY index** (vs. 52-week lag), **rolling z-score** (momentum).
-- **You control:**  
-  `--geo` (e.g., `US`, `MX`) • `--keywords` (comma-separated) • `--timeframe` (e.g., `"today 5-y"`)
+All features compare a series with its own past. Google scales each request separately, so absolute search volume is never compared across terms or markets.
 
----
+## Limitations
 
-## Output (stakeholder-ready)
-**Excel:** `reports/activation_radar.xlsx`  
-Sheets:
-- `Signals_preview` — sample of engineered features
-- `Activation_Radar` — per keyword × month aggregates + `act_score`
-- `Top_Months` — top 3 months per keyword (score, YoY, z, heat share)
+- **Search interest is not demand.** Treat these results as timing hypotheses, and confirm them with sales, site, or survey data before committing budget.
+- **The keyword choices are the author's.** A native speaker in each market should review them. Some terms carry more than one meaning ("tenis" in Mexico also means the sport), which adds noise.
+- **Google Trends samples its data**, so values move slightly between pulls. Peak months matched across two separate pulls in October 2026, but small differences of a few points shouldn't be read into.
+- **The score weights (0.6 / 0.3 / 0.1) are a judgment call**, not fitted to an outcome. Before using the score to decide anything, rerun it with other weights and check that the top months still lead.
+- **Four complete years per series** is enough to see a repeating pattern but not to estimate its uncertainty well.
 
-**PNGs:** `assets/trends_preview.png`, `assets/activation_radar.png`
+## Run it
 
-**Score formula**
-
-act_score = 0.6 * z_scaled + 0.3 * yoy_scaled + 0.1 * hot_share
-
-- `hot_share` = fraction of days with `z ≥ 1.2`  
-- `z_scaled` / `yoy_scaled` are min-max scaled within the table
-
----
-
-## Run the notebooks (optional)
-Use the same virtual environment as the CLI.
-
-1. Open `notebooks/01_signal_ingest.ipynb` and select this repo’s `.venv` as kernel.  
-2. **Run All** → generates:
-   - `data/trends_signals.csv`
-   - `reports/sample_activation_radar.xlsx`
-   - `assets/trends_preview.png`
-3. Open `notebooks/02_activation_windows.ipynb` and **Run All** → adds:
-   - `assets/activation_radar.png`
-   - updates Excel with `Activation_Radar` and `Top_Months`
-
----
-
-## Repository structure
-
-data/
-└── trends_signals.csv # tidy signals (auto-generated)
-notebooks/
-├── 01_signal_ingest.ipynb
-└── 02_activation_windows.ipynb
-assets/
-├── trends_preview.png
-└── activation_radar.png
-reports/
-├── sample_activation_radar.xlsx
-└── activation_radar.xlsx # from CLI run
-src/
-└── radar_cli.py # one-command generator (CSV, Excel, PNGs)
-README.md
-
----
-
-## Parameters (CLI)
 ```bash
-python -m src.radar_cli \
-  --geo US \
-  --keywords sneakers,laptops,furniture,cosmetics,groceries \
-  --timeframe "today 5-y" \
-  --out reports/activation_radar.xlsx
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
 
-- geo: 2-letter country/region code
-- keywords: comma-separated list (batching handled under the hood)
-- timeframe: Google Trends window (e.g., now 7-d, today 12-m, today 5-y)
-- out: Excel path (created/overwritten)
+python -m src.radar_cli                              # all markets in config/markets.json
+python -m src.radar_cli --only US,JP                 # a subset
+python -m src.radar_cli --geo GB --keywords trainers,makeup   # quick one-off market
 ```
 
----
+Google limits how often it answers. The tool spaces out its requests and retries after 20, 40, and 80 seconds. If Google still refuses, the tool exits with code 75 and leaves the previous outputs as they were. The monthly GitHub Action treats that exit as "skip this month" instead of a failure.
 
-## Interpretation guide
+**Tests** run offline against synthetic series with known answers and a fake Trends client:
 
-- Activation_Radar heatmap: brighter cells = higher momentum (seasonal + current heat).
-- Top_Months: where to focus activation budget/merch for each category.
-- Pair with business context (promo calendar, supply, margin) for final decisions.
-- Use absolute + relative comparisons across categories to prioritize spend.
+```bash
+pip install -r requirements-dev.txt && python -m pytest -q
+```
 
----
+## Outputs
 
-## Troubleshooting
-- Old kernel warning: you can proceed; upgrading to Python 3.12 removes the notice.
-- xlsxwriter append error: CLI overwrites workbook; in notebooks, appends use openpyxl.
-- Empty/partial data from pytrends: reduce keyword count, try different --timeframe, or increase sleep between payloads.
-- Images don’t render in README: confirm assets/trends_preview.png and assets/activation_radar.png exist and are committed; hard refresh GitHub.
+| File | What it holds |
+|---|---|
+| `reports/activation_radar.xlsx` | Sheets: Readme, Market_Peaks, Seasonality, Localization, Activation_Radar, Top_Months, Signals_preview |
+| `data/trends_signals.csv` | Weekly interest plus engineered features, per market and concept |
+| `data/localization_pairs.csv` | Weekly local-term vs English-term interest |
+| `assets/*.png` | The three charts above |
+
+## Repository layout
+
+```
+config/markets.json        markets, languages, and local search terms
+src/radar.py               features, seasonality, localization share, scoring (pure pandas)
+src/trends.py              Google Trends access with pacing and retries
+src/report.py              Excel workbook and charts
+src/radar_cli.py           command-line entry point
+tests/                     offline tests (pytest)
+notebooks/                 original 2025 exploration (single US market)
+.github/workflows/         tests on every push; data refresh monthly
+```
+
+Built by [Sylvia Zamora](https://sylviazamora.com). Data: Google Trends via [pytrends](https://github.com/GeneralMills/pytrends).

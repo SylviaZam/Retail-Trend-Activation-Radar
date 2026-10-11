@@ -1,30 +1,40 @@
-name: Build Activation Radar
+name: Monthly radar refresh
 on:
-  schedule: [{ cron: "0 8 * * 1" }]  # Mondays 08:00 UTC
-  workflow_dispatch:                  # run it manually from the Actions tab
+  schedule: [{ cron: "0 9 2 * *" }]  # 2nd of each month, 09:00 UTC
+  workflow_dispatch:                  # or run it from the Actions tab
 
 permissions:
-  contents: write   # allow the bot to commit artifacts back to the repo
+  contents: write   # lets the job commit refreshed outputs
 
 jobs:
-  build:
+  refresh:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install deps
+      - name: Install dependencies and a Japanese font for chart labels
         run: |
-          python -m pip install --upgrade pip
+          sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-cjk
           pip install -r requirements.txt
-      - name: Generate artifacts
+      - name: Pull Google Trends and rebuild outputs
+        id: build
         run: |
-          python -m src.radar_cli --geo US --keywords "sneakers,laptops,furniture,cosmetics,groceries" --timeframe "today 5-y"
-      - name: Commit artifacts
+          set +e
+          python -m src.radar_cli
+          code=$?
+          if [ "$code" = "75" ]; then
+            echo "::warning::Google Trends rate-limited every retry; kept last month's outputs."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          exit $code
+      - name: Commit refreshed outputs
+        if: steps.build.outputs.skip != 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/trends_signals.csv reports/activation_radar.xlsx assets/*.png || true
-          git commit -m "ci: weekly radar refresh" || echo "No changes"
+          git add data reports assets
+          git commit -m "data: monthly radar refresh ($(date -u +%Y-%m))" || echo "No changes"
           git push
